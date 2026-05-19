@@ -1,0 +1,3 @@
+## Use for: multi-step tasks ("Add dark mode, run tests, build")
+## Skip for: simple questions ("How do I print Hello World?")
+

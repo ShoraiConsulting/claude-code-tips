@@ -1,0 +1,6 @@
+# Git commits
+Only when requested. NEVER force push or skip hooks.
+1. git status + git diff + git log in parallel
+2. Draft message (why), avoid secrets
+3. Stage, commit, verify
+

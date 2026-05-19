@@ -17,6 +17,14 @@ This project patches the Claude Code CLI to reduce system prompt token usage. Wh
 **Supported installations:**
 - npm (Linux/macOS) - patch `cli.js` directly
 - Native binary (Linux ELF, macOS Mach-O) - extract, patch, repack
+- Homebrew Cask (macOS) - native binary at `/opt/homebrew/Caskroom/claude-code/<VERSION>/claude`
+
+## Choose your upgrade flow
+
+- **Container flow** (next section): autonomous, isolates risk, best when you're upgrading many environments or want Claude to fix patches unattended.
+- **Host flow (Homebrew Cask)**: faster for a single Mac install, no Docker required. See [Host Patching (Homebrew Cask, macOS)](#host-patching-homebrew-cask-macos) below.
+
+Both flows produce the same artifacts (`patch-cli.js`, `patches/*.find.txt`, `patches/*.replace.txt`) — pick whichever fits your setup.
 
 ## Quick Method: Let Claude Do It in a Container
 
@@ -218,6 +226,154 @@ shasum -a 256 /tmp/mac-cli.js
 
 ---
 
+# Host Patching (Homebrew Cask, macOS)
+
+A no-container alternative for macOS users on Homebrew Cask. Patches the native Mach-O ARM64 binary at `/opt/homebrew/Caskroom/claude-code/<VERSION>/claude` in place; the backup keeps the original Anthropic signature.
+
+**Key differences from the container flow:**
+- Use `patch-native.sh`, NOT `backup-cli.sh` + `patch-cli.js` directly (there is no `cli.js` at npm paths).
+- `native-repack.js` handles ad-hoc codesigning automatically after repack.
+- Backup is the full binary alongside it (`.backup`), not a `cli.js.backup`.
+
+## One-time setup
+
+```bash
+git clone https://github.com/ShoraiConsulting/claude-code-tips ~/git/claude-code-tips
+cd ~/git/claude-code-tips/system-prompt
+npm install  # installs node-lief (needed for native extract/repack)
+```
+
+## Upgrade procedure
+
+### 1. Get the new version number
+
+```bash
+claude --version  # e.g. 2.1.XXX
+NEW=2.1.XXX
+```
+
+### 2. Create a new version folder from the most recent working one
+
+```bash
+cd ~/git/claude-code-tips/system-prompt
+cp -r 2.1.133 $NEW  # adjust source to whatever your last working version is
+```
+
+### 3. Extract cli.js from the new binary and hash it
+
+```bash
+node 2.1.89/native-extract.js \
+  /opt/homebrew/Caskroom/claude-code/$NEW/claude \
+  /tmp/claude-$NEW-cli.js
+shasum -a 256 /tmp/claude-$NEW-cli.js
+```
+
+### 4. Update version metadata in the new folder
+
+In `$NEW/patch-cli.js`:
+```javascript
+const EXPECTED_VERSION = '2.1.XXX';
+const EXPECTED_HASHES = {
+  npm: 'TODO',
+  'native-linux-arm64': 'TODO',
+  'native-linux-x64': 'TODO',
+  'native-macos-arm64': '<hash from step 3>',
+};
+```
+
+In `$NEW/backup-cli.sh`:
+```bash
+EXPECTED_VERSION="2.1.XXX"
+EXPECTED_HASH="<hash from step 3>"
+```
+
+In `$NEW/patch-native.sh`:
+```bash
+BINARY_PATH="${1:-$HOME/.local/share/claude/versions/2.1.XXX}"
+```
+
+### 5. Dry-run the patcher against the extracted cli.js
+
+```bash
+cp /tmp/claude-$NEW-cli.js /tmp/claude-$NEW-cli.js.backup
+node $NEW/patch-cli.js /tmp/claude-$NEW-cli.js
+```
+
+Note which patches show `[SKIP]` or `not found`. Patches that show `[OK]` need no work.
+
+### 6. Fix or accept failing patches
+
+See [Diagnosing failed patches](#diagnosing-failed-patches) in Troubleshooting for the binary-search workflow and the three possible outcomes (text moved, variable renamed, text removed by Anthropic).
+
+### 7. Security audit before applying
+
+```bash
+grep -rn "http\|curl\|POST\|exfil\|ssh\|\.env\|secret\|token\|password\|credential\|api.key\|webhook\|eval\|fetch\|XMLHttp" \
+  ~/git/claude-code-tips/system-prompt/$NEW/patches/*.replace.txt
+```
+
+All hits should be English words inside tool descriptions, not URLs or commands. This protects against supply-chain tampering of patch files.
+
+### 8. Apply to the live binary
+
+```bash
+cd ~/git/claude-code-tips/system-prompt/$NEW
+bash patch-native.sh /opt/homebrew/Caskroom/claude-code/$NEW/claude
+```
+
+`patch-native.sh` will:
+1. Validate the binary hash
+2. Create a backup at `.../claude.backup`
+3. Extract cli.js, apply patches, repack, ad-hoc codesign
+4. Print `2.1.XXX (Claude Code)` if successful
+
+### 9. Verify
+
+```bash
+claude -p 'Any [object Object] or [DYNAMIC] in your prompt? Yes or no only.'
+claude -p 'Run: echo "tools work"' --allowedTools Bash
+```
+
+Both should succeed without errors.
+
+### 10. Restore if broken
+
+```bash
+cp /opt/homebrew/Caskroom/claude-code/$NEW/claude.backup \
+   /opt/homebrew/Caskroom/claude-code/$NEW/claude
+```
+
+The backup retains the original Anthropic signature.
+
+## File layout
+
+```
+~/git/claude-code-tips/system-prompt/
+  node_modules/          ← node-lief lives here (run npm install once)
+  2.1.XXX/               ← per-version patch folder
+    patch-cli.js         ← applies patches; update EXPECTED_VERSION + hash
+    patch-native.sh      ← orchestrates extract → patch → repack
+    backup-cli.sh        ← for npm installs only (not used on Homebrew Cask)
+    restore-cli.sh       ← for npm installs only
+    native-extract.js    ← pulls cli.js out of Mach-O binary
+    native-repack.js     ← puts patched cli.js back + codesigns
+    patches/
+      *.find.txt         ← text to find in bundle
+      *.replace.txt      ← replacement text
+
+/opt/homebrew/Caskroom/claude-code/2.1.XXX/
+  claude                 ← patched binary (ad-hoc signed)
+  claude.backup          ← original Anthropic-signed binary
+```
+
+## Notes
+
+- Homebrew upgrades install new versions at new paths and update the `/opt/homebrew/bin/claude` symlink. The previously patched binary is untouched — you must re-patch after each upgrade.
+- This repo typically only ships patches for the version(s) the maintainer is running. For newer versions, copy from the most recent working folder and fix any patches that fail (usually 30–90 min depending on how much the system prompt changed).
+- When a patch shows "not found" for the first 10–15 chars, that's usually good news — Anthropic removed the text, you get the savings for free.
+
+---
+
 # Native Binary Patching
 
 Native Claude Code binaries (installed via `curl -fsSL https://claude.ai/install.sh | bash`) embed cli.js inside the binary. We use `node-lief` to extract, patch, and repack.
@@ -328,26 +484,74 @@ For VAR patches, the regex captures whatever exists in the bundle and reuses it 
 
 **When patches fail**, it's because the text content changed, not the variable names. Use the binary search technique below to find where text diverges.
 
-## Finding where patch text diverges
+## Diagnosing failed patches
 
-When a patch shows "not found in bundle", find the mismatch point:
+When a patch shows "not found in bundle", use binary search to find the divergence point. This Unicode-aware version handles native binaries (which escape `—`, `→`, smart quotes, etc.):
 
 ```javascript
-// Run: node -e '<paste this>'
+// Save as /tmp/diagnose.js, run: node /tmp/diagnose.js PATCHNAME
 const fs = require('fs');
-const bundle = fs.readFileSync('/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js', 'utf8');
-const patch = fs.readFileSync('patches/PATCHNAME.find.txt', 'utf8');
+const name = process.argv[2];
+const VERSION = process.env.VERSION || '2.1.XXX';
+const bundle = fs.readFileSync(`/tmp/claude-${VERSION}-cli.js.backup`, 'utf8');
+const PATCH_DIR = `${__dirname}/../system-prompt/${VERSION}/patches`;
 
+const UNICODE = [
+  ['—','\\u2014'],['→','\\u2192'],['–','\\u2013'],['"','\\u201c'],
+  ['"','\\u201d'],['‘','\\u2018'],['’','\\u2019'],['…','\\u2026'],
+];
+function toNative(s) {
+  let r = s;
+  for (const [c,e] of UNICODE) r = r.split(c).join(e);
+  return r;
+}
+
+const patch = toNative(fs.readFileSync(`${PATCH_DIR}/${name}.find.txt`, 'utf8'));
 let lo = 10, hi = patch.length;
 while (lo < hi) {
   const mid = Math.floor((lo + hi + 1) / 2);
   bundle.indexOf(patch.slice(0, mid)) !== -1 ? lo = mid : hi = mid - 1;
 }
-console.log('Match up to char:', lo, 'of', patch.length);
-console.log('Patch:', JSON.stringify(patch.slice(lo-20, lo+30)));
 const idx = bundle.indexOf(patch.slice(0, lo));
-console.log('Bundle:', JSON.stringify(bundle.slice(idx + lo - 20, idx + lo + 30)));
+console.log(`Match up to char: ${lo} of ${patch.length}`);
+if (idx !== -1) {
+  console.log('Patch: ', JSON.stringify(patch.slice(Math.max(0,lo-40), lo+60)));
+  console.log('Bundle:', JSON.stringify(bundle.slice(idx+lo-40, idx+lo+60)));
+} else {
+  console.log('First 40 of patch:', JSON.stringify(patch.slice(0,40)));
+  const idx2 = bundle.indexOf(patch.slice(0,15));
+  if (idx2 !== -1) console.log('Bundle at 15-char match:', JSON.stringify(bundle.slice(idx2, idx2+300)));
+  else console.log('Not found even in first 15 chars — text likely removed by Anthropic');
+}
 ```
+
+**Three possible outcomes:**
+
+| Diagnostic says | Action |
+|---|---|
+| Match up to ~full length, tiny diff at end | Update `find.txt` near the end only |
+| Match up to N chars, only variable names changed (e.g. `${DbY()}` vs `${Fg5()}`) | The patcher's regex auto-handles `${...}` — look for OTHER text changes nearby |
+| First 10–15 chars not found | Text was removed by Anthropic — delete or skip the patch; you keep the savings for free |
+
+To find where the new (replacement) text lives in the bundle once you've located the match start:
+```bash
+node -e "
+const b = require('fs').readFileSync('/tmp/claude-VERSION-cli.js.backup','utf8');
+const i = b.indexOf('first few words of new text here');
+console.log(JSON.stringify(b.slice(i, i+500)));
+"
+```
+
+## Chained v2 patches break when v1 changes
+
+Some patches come in v1/v2 pairs (e.g. `git-commit` + `git-commit-v2`, `todowrite-examples` + `todowrite-examples-v2`). The v2's `find.txt` matches the **output of v1**, not the original system prompt.
+
+If you slim v1's `replace.txt` further, v2 will SKIP because it can't find the old v1 output. Two valid responses:
+
+- **Accept the skip** — if your slimmer v1 output is already good enough, v2 becomes obsolete. Net savings can still beat the v1+v2 chain.
+- **Update v2's `find.txt`** to match the new v1 output, preserving the chain.
+
+For `git-commit` and `pr-creation`, the v1 patch contains a HEREDOC example that's useful for Claude — accepting v2's skip preserves that context.
 
 ## Testing patches without root
 

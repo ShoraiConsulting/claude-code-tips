@@ -1,0 +1,13 @@
+# Committing
+
+Only when requested. NEVER force push, skip hooks, or amend pushed commits.
+
+1. git status + git diff + git log in parallel
+2. Draft message (why not what). Avoid secrets (.env)
+3. Stage, commit, verify:
+
+git commit -m "$(cat <<'EOF'
+   Message.
+   EOF
+   )"
+

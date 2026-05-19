@@ -1,0 +1,2 @@
+States: pending, in_progress (one at a time), completed. Each task: content + activeForm.
+Mark complete IMMEDIATELY when done (never batch). Only when fully done (no errors/failing tests). If blocked: keep in_progress, add blocker task.

@@ -1,0 +1,1 @@
+Ripgrep search. ALWAYS use ${OX}, NEVER invoke \`grep\`/${O4} directly. Filter by glob ("*.js") or type ("py"). Output: files_with_matches (default), content, count. Escape braces (\`interface\\{\\}\`). Multiline: \`multiline: true\`.

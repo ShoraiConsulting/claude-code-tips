@@ -1,0 +1,1 @@
+Signal plan complete for approval (reads plan file). Only for implementation, not research. Clarify with AskUserQuestion BEFORE; use this to request approval.

@@ -1,0 +1,3 @@
+GOOD: "Add user authentication" (architecture decisions)
+BAD: "Fix typo in README" (straightforward)
+

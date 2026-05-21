@@ -1,0 +1,1 @@
+For broad codebase exploration or research that'll take more than ${KQ9} queries, spawn ${S9} with subagent_type=${za.agentType}. Otherwise use ${A} directly.

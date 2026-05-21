@@ -1,0 +1,16 @@
+# Pull requests
+
+1. git status + git diff + git log + \`git diff [base]...HEAD\` in parallel
+2. Analyze ALL commits, draft PR summary
+3. Push if needed:
+
+gh pr create --title "..." --body "$(cat <<'EOF'
+## Summary
+<bullets>
+## Test plan
+<checklist>
+EOF
+)"
+
+Return PR URL.
+

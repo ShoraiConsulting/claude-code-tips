@@ -1,0 +1,2 @@
+Use: 3+ steps, multiple tasks. Skip: single trivial tasks, simple questions.
+Mark in_progress before starting, completed immediately when done.

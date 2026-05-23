@@ -1,0 +1,1 @@
+Use when: multiple approaches, architectural decisions, large changes, unclear requirements, or user input needed.

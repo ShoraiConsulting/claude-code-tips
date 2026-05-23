@@ -1,0 +1,2 @@
+Notes: Prefer MCP web fetch (mcp__*) if available. On cross-host redirect, retry with new URL.
+

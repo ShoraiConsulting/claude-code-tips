@@ -1,0 +1,3 @@
+Reads a file. Assume user paths valid. Non-existent files error.
+
+Usage:

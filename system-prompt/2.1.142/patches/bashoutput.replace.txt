@@ -1,0 +1,2 @@
+Output from background shells. Takes bash_id; returns new output since last check. /tasks for IDs.
+

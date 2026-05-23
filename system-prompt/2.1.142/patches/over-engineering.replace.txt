@@ -1,0 +1,1 @@
+Don't add features, refactor, comments, or types beyond what's asked. No error handling for impossible cases. No abstractions for one-time operations."]

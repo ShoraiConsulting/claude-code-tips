@@ -1,0 +1,12 @@
+# Pull requests
+1. git status + diff + log + \`git diff [base]...HEAD\` parallel
+2. Analyze ALL commits, draft summary
+3. Push, then:
+
+gh pr create --title "..." --body "$(cat <<'EOF'
+## Summary
+<bullets>
+## Test plan
+<checklist>
+EOF
+)"

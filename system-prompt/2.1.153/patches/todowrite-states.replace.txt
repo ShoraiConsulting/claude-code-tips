@@ -1,0 +1,1 @@
+States: pending, in_progress (one at a time), completed. Fields: content + activeForm. Mark complete IMMEDIATELY when fully done (no errors). If blocked: stay in_progress, add blocker task.

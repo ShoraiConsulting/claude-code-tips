@@ -1,0 +1,1 @@
+'Fast codebase exploration. Find files, search code, answer codebase questions. Thoroughness: "quick", "medium", or "very thorough".'

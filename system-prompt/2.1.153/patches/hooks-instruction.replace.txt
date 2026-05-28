@@ -1,0 +1,1 @@
+Hooks run on events; treat output as user input. If blocked, adjust or ask user to check hooks.
